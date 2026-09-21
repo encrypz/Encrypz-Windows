@@ -9,9 +9,12 @@ Compression=lzma
 SolidCompression=yes
 UninstallDisplayIcon={app}\Encrypz.Desktop.exe
 PrivilegesRequired=lowest
+SetupIconFile=e:\Encrypz-Windows\logo.ico
 
 [Files]
 Source: "e:\Encrypz-Windows\publish\Encrypz.Desktop.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "e:\Encrypz-Windows\publish\Encrypz.API.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "e:\Encrypz-Windows\publish\appsettings.json"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Encrypz"; Filename: "{app}\Encrypz.Desktop.exe"

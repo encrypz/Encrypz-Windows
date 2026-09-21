@@ -36,9 +36,27 @@ public partial class App : Application
             .Build();
     }
 
+    private System.Diagnostics.Process? _apiProcess;
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         await AppHost!.StartAsync();
+        
+        var apiPath = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "Encrypz.API.exe");
+        if (System.IO.File.Exists(apiPath))
+        {
+            _apiProcess = new System.Diagnostics.Process
+            {
+                StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = apiPath,
+                    WorkingDirectory = System.AppDomain.CurrentDomain.BaseDirectory,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+            _apiProcess.Start();
+        }
 
         var mainWindow = AppHost.Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
@@ -48,6 +66,15 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        try 
+        {
+            if (_apiProcess != null && !_apiProcess.HasExited)
+            {
+                _apiProcess.Kill();
+            }
+        }
+        catch { }
+
         await AppHost!.StopAsync();
         base.OnExit(e);
     }

@@ -17,7 +17,7 @@ public class Program
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
         builder.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+            options.UseMySql(connectionString, ServerVersion.Parse("8.0.32-mysql")));
 
         builder.Services.AddControllers();
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -42,6 +42,13 @@ public class Program
         });
 
         var app = builder.Build();
+
+        // Automatically migrate the database on startup
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.Database.EnsureCreated();
+        }
 
         // Configure the HTTP request pipeline.
         if (app.Environment.IsDevelopment())

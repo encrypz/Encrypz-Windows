@@ -30,9 +30,8 @@ namespace Encrypz.Infrastructure.Data
             {
                 entity.HasKey(e => e.Id);
                 
-                // Map cryptographic byte arrays to MySQL VARBINARY and LONGBLOB
                 entity.Property(e => e.EncryptedFileName)
-                      .HasColumnType("VARBINARY(512)")
+                      .HasMaxLength(512)
                       .IsRequired();
 
                 entity.Property(e => e.GoogleDriveFileId)
@@ -40,11 +39,38 @@ namespace Encrypz.Infrastructure.Data
                       .IsRequired();
 
                 entity.Property(e => e.InitializationVector)
-                      .HasColumnType("VARBINARY(16)")
+                      .HasMaxLength(16)
                       .IsRequired();
 
                 entity.Property(e => e.AuthenticationTag)
-                      .HasColumnType("VARBINARY(16)")
+                      .HasMaxLength(16)
+                      .IsRequired();
+
+                entity.Property(e => e.EncryptedThumbnail)
+                      .HasMaxLength(2000);
+                      
+                entity.Property(e => e.ThumbnailIv)
+                      .HasMaxLength(16);
+                      
+                entity.Property(e => e.ThumbnailAuthTag)
+                      .HasMaxLength(16);
+            });
+
+            // Folder configuration
+            modelBuilder.Entity<Folder>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                
+                entity.Property(e => e.EncryptedFolderName)
+                      .HasMaxLength(512)
+                      .IsRequired();
+
+                entity.Property(e => e.InitializationVector)
+                      .HasMaxLength(16)
+                      .IsRequired();
+
+                entity.Property(e => e.AuthenticationTag)
+                      .HasMaxLength(16)
                       .IsRequired();
             });
 
@@ -72,6 +98,19 @@ namespace Encrypz.Infrastructure.Data
                 .WithMany(f => f.Files)
                 .HasForeignKey(f => f.FolderId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // Fix for TiDB: Remove ascii_general_ci collation from Guid columns
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                foreach (var property in entityType.GetProperties())
+                {
+                    if (property.ClrType == typeof(Guid) || property.ClrType == typeof(Guid?))
+                    {
+                        property.SetCollation("utf8mb4_general_ci");
+                        property.SetCharSet("utf8mb4");
+                    }
+                }
+            }
         }
     }
 }
