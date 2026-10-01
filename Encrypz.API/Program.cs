@@ -11,10 +11,15 @@ public class Program
     {
         DotNetEnv.Env.Load();
         var builder = WebApplication.CreateBuilder(args);
+        var desktopSettings = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Encrypz", "settings.json");
+        if (!string.IsNullOrEmpty(builder.Configuration["Desktop:InstanceId"]))
+            builder.Configuration.AddJsonFile(desktopSettings, optional: true, reloadOnChange: false).AddEnvironmentVariables();
 
         // Add services to the container.
         var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection in %LOCALAPPDATA%\\Encrypz\\settings.json or the ConnectionStrings__DefaultConnection environment variable.");
 
         builder.Services.AddDbContext<ApplicationDbContext>(options =>
             options.UseMySql(connectionString, ServerVersion.Parse("8.0.32-mysql")));
@@ -43,11 +48,19 @@ public class Program
 
         var app = builder.Build();
 
-        // Automatically migrate the database on startup
-        using (var scope = app.Services.CreateScope())
+        // Initialize the schema before reporting readiness.
+        try
         {
+            using var scope = app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             db.Database.EnsureCreated();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(DatabaseConnectionFailure.Prefix + DatabaseConnectionFailure.Classify(ex));
+            app.Logger.LogError(ex, "Database initialization failed.");
+            Environment.ExitCode = 1;
+            return;
         }
 
         // Configure the HTTP request pipeline.
@@ -57,7 +70,8 @@ public class Program
             app.UseSwaggerUI();
         }
 
-        app.UseHttpsRedirection();
+        if (string.IsNullOrEmpty(builder.Configuration["Desktop:InstanceId"]))
+            app.UseHttpsRedirection();
 
         app.UseCors("AllowFrontend");
 
@@ -65,6 +79,7 @@ public class Program
 
 
         app.MapControllers();
+        app.MapGet("/health", () => Results.Text(builder.Configuration["Desktop:InstanceId"] ?? "ready"));
 
         app.Run();
     }

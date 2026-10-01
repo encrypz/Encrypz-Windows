@@ -109,7 +109,7 @@ namespace Encrypz.Infrastructure.Services
 
         public async Task<string> UploadFileAsync(string refreshToken, byte[] fileBytes, string fileName)
         {
-            var service = GetDriveService(refreshToken);
+            using var service = GetDriveService(refreshToken);
 
             var folderId = await GetOrCreateFolderAsync(service, "Encrypz");
 
@@ -134,18 +134,20 @@ namespace Encrypz.Infrastructure.Services
 
         public async Task<byte[]> DownloadFileAsync(string refreshToken, string fileId)
         {
-            var service = GetDriveService(refreshToken);
+            using var service = GetDriveService(refreshToken);
 
             using var stream = new MemoryStream();
             var request = service.Files.Get(fileId);
-            await request.DownloadAsync(stream);
+            var progress = await request.DownloadAsync(stream);
+            if (progress.Status != Google.Apis.Download.DownloadStatus.Completed)
+                throw new IOException("Google Drive download failed.", progress.Exception);
 
             return stream.ToArray();
         }
 
         public async Task DeleteFileAsync(string refreshToken, string fileId)
         {
-            var service = GetDriveService(refreshToken);
+            using var service = GetDriveService(refreshToken);
             
             try
             {

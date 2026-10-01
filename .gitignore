@@ -480,3 +480,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Desktop packages belong under artifacts, not in source control.
+/Encrypz.Desktop.zip
+/EncrypzSetup.exe

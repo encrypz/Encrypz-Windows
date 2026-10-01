@@ -1,20 +1,24 @@
+#ifndef PublishDir
+  #error Pass /DPublishDir pointing to the output from build-windows.ps1
+#endif
 [Setup]
+AppId=Encrypz.Desktop
 AppName=Encrypz Desktop
-AppVersion=1.0.0
-DefaultDirName={autopf}\Encrypz
+AppVersion=1.0.1
+DefaultDirName={localappdata}\Programs\Encrypz
 DefaultGroupName=Encrypz
-OutputDir=e:\Encrypz-Windows
 OutputBaseFilename=EncrypzSetup
 Compression=lzma
 SolidCompression=yes
 UninstallDisplayIcon={app}\Encrypz.Desktop.exe
 PrivilegesRequired=lowest
-SetupIconFile=e:\Encrypz-Windows\logo.ico
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+SetupIconFile=logo.ico
+CloseApplications=yes
 
 [Files]
-Source: "e:\Encrypz-Windows\publish\Encrypz.Desktop.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "e:\Encrypz-Windows\publish\Encrypz.API.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "e:\Encrypz-Windows\publish\appsettings.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Excludes: "*.pdb,*.log"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Encrypz"; Filename: "{app}\Encrypz.Desktop.exe"

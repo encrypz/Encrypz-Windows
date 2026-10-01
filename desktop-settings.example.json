@@ -1,0 +1,13 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=YOUR_HOST;Port=3306;Database=Encrypz;User=YOUR_USER;Password=YOUR_PASSWORD;SslMode=Required"
+  },
+  "GoogleDrive": {
+    "ClientId": "YOUR_GOOGLE_CLIENT_ID",
+    "ClientSecret": "YOUR_GOOGLE_CLIENT_SECRET",
+    "RedirectUri": "http://localhost:5207/api/Auth/google-callback"
+  },
+  "Frontend": {
+    "AllowedOrigins": "https://app.encrypz.local,http://localhost:5173"
+  }
+}

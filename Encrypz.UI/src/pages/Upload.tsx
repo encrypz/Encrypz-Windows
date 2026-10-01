@@ -72,6 +72,7 @@ export const Upload = () => {
                 }
 
                 const payload = {
+                    fileSize: file.size,
                     encryptedFileName: fileNameB64,
                     payload: arrayBufferToBase64(encrypted.payload),
                     initializationVector: arrayBufferToBase64(encrypted.iv),

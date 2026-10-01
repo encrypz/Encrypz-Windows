@@ -43,7 +43,7 @@ namespace Encrypz.API.Controllers
                 return Unauthorized("User not found. Please register first.");
             }
 
-            return Ok(new { UserId = user.Id, Username = user.Username });
+            return Ok(new { UserId = user.Id, Username = user.Username, IsGoogleDriveConnected = !string.IsNullOrEmpty(user.GoogleRefreshToken) });
         }
 
         [HttpPost("register")]
@@ -101,7 +101,7 @@ namespace Encrypz.API.Controllers
 
             // Redirect back to frontend with success flag
             var frontendUrl = _configuration["Frontend:AllowedOrigins"]?.Split(',')[0] ?? "http://localhost:5173";
-            return Redirect($"{frontendUrl}/connect?connected=true");
+            return Redirect($"{frontendUrl.TrimEnd('/')}/#/connect?connected=true");
         }
 
         [HttpGet("user/{userId}")]

@@ -193,13 +193,13 @@ export const MyVault = () => {
     const handleDownload = async (fileId: string, filename: string) => {
         setLoading(true);
         try {
-            const response = await axios.get(`${API_BASE_URL}/Files/${fileId}/download`);
-            const { encryptedData, initializationVector, authenticationTag } = response.data;
+            const response = await axios.get(`${API_BASE_URL}/Files/${fileId}`);
+            const { payload, initializationVector, authenticationTag } = response.data;
             
             if (!masterPassword || !username) throw new Error("Missing credentials");
             const key = await deriveKey(masterPassword, username);
             
-            const payloadBytes = base64ToArrayBuffer(encryptedData);
+            const payloadBytes = base64ToArrayBuffer(payload);
             const ivBytes = base64ToArrayBuffer(initializationVector);
             const tagBytes = base64ToArrayBuffer(authenticationTag);
             

@@ -1,82 +1,139 @@
-using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-
-using Encrypz.Desktop.ViewModels;
-
-using Microsoft.Web.WebView2.Core;
+﻿using System.Diagnostics;
 using System.IO;
+using System.Windows;
+using System.Windows.Threading;
+using Microsoft.Web.WebView2.Core;
+using Encrypz.Desktop.ViewModels;
 
 namespace Encrypz.Desktop;
 
-/// <summary>
-/// Interaction logic for MainWindow.xaml
-/// </summary>
 public partial class MainWindow : Window
 {
+    private readonly CancellationTokenSource _lifetime = new();
+    private bool _starting;
+    private bool _ready;
+    private bool _closed;
+    private readonly DispatcherTimer _serviceMonitor = new() { Interval = TimeSpan.FromSeconds(3) };
+
     public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();
         DataContext = viewModel;
-        InitializeAsync();
+        _serviceMonitor.Tick += (_, _) =>
+        {
+            if (_ready && !_starting && !((App)Application.Current).IsApiRunning)
+                ShowFailure("The local service has stopped. Choose Try again to reconnect, or open the logs for details.");
+        };
+        _serviceMonitor.Start();
+        Loaded += async (_, _) => await InitializeAsync();
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            _serviceMonitor.Stop();
+            _lifetime.Cancel();
+            webView.Dispose();
+        };
     }
 
-    async void InitializeAsync()
+    private async Task InitializeAsync()
     {
-        try 
+        if (_starting || _closed) return;
+        _starting = true;
+        SettingsButton.IsEnabled = false;
+        RetryButton.Visibility = Visibility.Collapsed;
+        StartupProgress.Visibility = Visibility.Visible;
+        StartupTitle.Text = "Opening your workspace";
+        StartupDetail.Text = "Starting the local service and connecting to your database…";
+        StatusLabel.Text = "Starting local service";
+        try
         {
-            await webView.EnsureCoreWebView2Async(null);
-            
-            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "EncrypzApp");
-            var distFolder = System.IO.Path.Combine(tempDir, "dist");
-            System.IO.Directory.CreateDirectory(distFolder);
+            var distFolder = Path.Combine(AppContext.BaseDirectory, "dist");
+            if (!File.Exists(Path.Combine(distFolder, "index.html")))
+                throw new FileNotFoundException("The application UI is missing. Reinstall Encrypz using the complete Windows package.");
 
-            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-            foreach (var resourceName in assembly.GetManifestResourceNames())
+            if (!File.Exists(SettingsWindow.SettingsPath) &&
+                string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")))
             {
-                if (resourceName.StartsWith("Encrypz.Desktop.dist."))
-                {
-                    var logicalPath = resourceName.Substring("Encrypz.Desktop.dist.".Length);
-                    var targetFile = "";
-                    if (logicalPath.StartsWith("assets."))
-                    {
-                        var fileName = logicalPath.Substring("assets.".Length);
-                        var assetsDir = System.IO.Path.Combine(distFolder, "assets");
-                        System.IO.Directory.CreateDirectory(assetsDir);
-                        targetFile = System.IO.Path.Combine(assetsDir, fileName);
-                    }
-                    else
-                    {
-                        targetFile = System.IO.Path.Combine(distFolder, logicalPath);
-                    }
-
-                    using var stream = assembly.GetManifestResourceStream(resourceName);
-                    if (stream != null)
-                    {
-                        using var fileStream = System.IO.File.Create(targetFile);
-                        stream.CopyTo(fileStream);
-                    }
-                }
+                StartupTitle.Text = "Welcome to Encrypz";
+                StartupDetail.Text = "Set up your database and Google Drive connection to open your vault.";
+                if (new SettingsWindow { Owner = this }.ShowDialog() != true)
+                    throw new InvalidOperationException("Open Connection settings to finish setup, then choose Try again.");
             }
 
+            await ((App)Application.Current).StartApiAsync(_lifetime.Token);
+            StartupDetail.Text = "Preparing your vault…";
+            var environment = await CoreWebView2Environment.CreateAsync(null,
+                Path.Combine(App.DataDirectory, "WebView2"));
+            if (_closed) return;
+            await webView.EnsureCoreWebView2Async(environment);
+            if (_closed) return;
             webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                "app.encrypz.local", 
-                distFolder, 
-                CoreWebView2HostResourceAccessKind.Allow);
-
-            webView.Source = new Uri("http://app.encrypz.local/index.html");
+                "app.encrypz.local", distFolder, CoreWebView2HostResourceAccessKind.DenyCors);
+            webView.CoreWebView2.NavigationCompleted -= NavigationCompleted;
+            webView.CoreWebView2.NavigationCompleted += NavigationCompleted;
+            webView.DefaultBackgroundColor = System.Drawing.Color.FromArgb(10, 10, 10);
+            webView.CoreWebView2.Navigate("https://app.encrypz.local/index.html");
         }
+        catch (OperationCanceledException) when (_closed) { }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(ex.ToString(), "WebView2 Init Error");
-            System.IO.File.WriteAllText("webview2_crash.log", ex.ToString());
+            if (!_closed)
+            {
+                ((App)Application.Current).StopApi();
+                ShowFailure(ex.Message);
+                App.Log(ex.ToString());
+            }
         }
+        finally
+        {
+            _starting = false;
+            if (!_closed) SettingsButton.IsEnabled = true;
+        }
+    }
+
+    private void NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+    {
+        if (_closed) return;
+        if (!e.IsSuccess)
+        {
+            ShowFailure($"The page could not load ({e.WebErrorStatus}). Check your connection and try again.");
+            return;
+        }
+        _ready = true;
+        webView.Visibility = Visibility.Visible;
+        StartupPanel.Visibility = Visibility.Collapsed;
+        StatusLabel.Text = "Encrypz Desktop • Local service running";
+    }
+
+    private void ShowFailure(string message)
+    {
+        _ready = false;
+        webView.Visibility = Visibility.Hidden;
+        StartupPanel.Visibility = Visibility.Visible;
+        StartupProgress.Visibility = Visibility.Collapsed;
+        StartupTitle.Text = "Let’s get you connected";
+        StartupDetail.Text = message;
+        RetryButton.Visibility = Visibility.Visible;
+        StatusLabel.Text = "Setup needs attention";
+    }
+
+    private async void Retry_Click(object sender, RoutedEventArgs e) => await InitializeAsync();
+
+    private async void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        if (new SettingsWindow { Owner = this }.ShowDialog() == true)
+        {
+            if (!_ready) await InitializeAsync();
+            else StatusLabel.Text = "Settings saved • Restart Encrypz to apply";
+        }
+    }
+
+    private void Logs_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", App.DataDirectory) { UseShellExecute = true });
+        }
+        catch (Exception ex) { App.ReportError("Unable to open the log folder.", ex); }
     }
 }
